@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 import xacro
 
 def generate_launch_description():
-    package_name="ball_follower"
+    package_name="maze_solver"
 
     use_sim_time=LaunchConfiguration('use_sim_time')
     # use_ros2_control=LaunchConfiguration('use_ros2_control')

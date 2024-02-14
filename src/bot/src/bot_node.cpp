@@ -14,7 +14,7 @@
 
 int main(int argc, char** argv)
 { 
-    std::string package_name="ball_follower";
+    std::string package_name="maze_solver";
     // rclcpp::init(argc, argv);
 
     // Include the robot_state_publisher launch file, provided by our own package. Force sim time to be enabled

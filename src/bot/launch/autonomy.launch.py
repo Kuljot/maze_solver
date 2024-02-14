@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    package_name="ball_follower"
+    package_name="maze_solver"
 
     # Add Robot State Publisher launch file 
     autonomy_node_cmd=Node(

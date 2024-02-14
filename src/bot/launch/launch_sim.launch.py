@@ -8,7 +8,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    package_name="ball_follower"
+    package_name="maze_solver"
     world_file="./src/bot/worlds/Maze"
 
     # Add Robot State Publisher launch file 

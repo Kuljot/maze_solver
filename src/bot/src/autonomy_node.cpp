@@ -3,7 +3,7 @@
 using namespace std::chrono_literals;
 
 const std::string bt_xml_dir=
-      ament_index_cpp::get_package_share_directory("ball_follower")+"/bt_xml";
+      ament_index_cpp::get_package_share_directory("maze_solver")+"/bt_xml";
 
 AutonomyNode::AutonomyNode(const std::string & node_name)
   : Node(node_name)

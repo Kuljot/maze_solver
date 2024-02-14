@@ -13,7 +13,7 @@ def generate_launch_description():
         Constructor to define params later to be used in launching
         individual nodes
     '''
-    package_name="ball_follower"
+    package_name="maze_solver"
 
     #Get the use_sim_time from launch arguments
     use_sim_time=LaunchConfiguration('use_sim_time')

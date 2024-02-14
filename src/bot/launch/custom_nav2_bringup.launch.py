@@ -15,7 +15,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
-    package_name="ball_follower"
+    package_name="maze_solver"
     world_file="./src/bot/worlds/world3.py"
     launch_dir = os.path.join(get_package_share_directory('nav2_bringup'), 'launch')
 
@@ -267,9 +267,9 @@ def generate_launch_description():
 #             }]
 #         ),
 
-#         # Include your custom nodes (e.g., ball_follower components)
+#         # Include your custom nodes (e.g., maze_solver components)
 #         Node(
-#             package='ball_follower',
+#             package='maze_solver',
 #             executable='launch_sim.launch.py',
 #             arguments=['worlds:=world3.py'],
 #             output='screen'
