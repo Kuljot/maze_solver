@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" >
+
+    <!-- Specify some standard visual calculations https://en.wikipedia.org/wiki/List_of_moments_of_inertia -->
+    <!-- These make use of xacro's mathematical functionality -->
+
+    <xacro:macro name="visual_box" params="x y z r g b a *origin">       
+        <visual>
+            <xacro:insert_block name="origin"/>
+            <geometry>
+                <box size="${x} ${y} ${z}"/>
+            </geometry>
+            <material name="green">
+                <color rgba="${r} ${g} ${b} ${a}"/>
+            </material>
+        </visual>
+        <collision>
+            <xacro:insert_block name="origin"/>
+            <geometry>
+                <box size="${x} ${y} ${z}"/>
+            </geometry>
+        </collision>
+    </xacro:macro>
+
+    <xacro:macro name="visual_cylinder" params="length radius r g b a *origin">
+        <visual>
+            <xacro:insert_block name="origin"/>
+            <geometry>
+                <cylinder radius="${radius}" length="${length}"/>
+            </geometry>
+            <material name="red">
+                <color rgba="${r} ${g} ${b} ${a}"/>
+            </material>
+        </visual>
+        <collision>
+            <!-- <xacro:insert_block name="origin"/> -->
+            <geometry>
+                <cylinder radius="${radius}" length="${length}"/>
+            </geometry>
+        </collision>
+    </xacro:macro>
+
+    <xacro:macro name="visual_sphere" params="radius r g b a *origin">
+        <visual>
+            <xacro:insert_block name="origin"/>
+            <geometry>
+                <sphere radius="${radius}"/>
+            </geometry>
+            <material name="black">
+                <color rgba="${r} ${g} ${b} ${a}"/>
+            </material>
+        </visual>
+        <collision>
+            <xacro:insert_block name="origin"/>
+            <geometry>
+                <sphere radius="${radius}"/>
+            </geometry>
+        </collision>
+    </xacro:macro>
+
+    
+</robot>

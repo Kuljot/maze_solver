@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro"  name="robot">
+
+    <xacro:property name="laser_m" value="0.2" /> 
+    <xacro:property name="laser_r" value="0.05" />
+    <xacro:property name="laser_l" value="0.05" />
+
+    <joint name="laser_joint" type="fixed">
+        <parent link="chassis"/>
+        <child link="laser_frame"/>
+        <origin xyz="0 0 ${chassis_h+1.5*laser_l}" rpy="0 0 0"/>
+    </joint>
+
+    <link name="laser_frame">
+        <xacro:inertial_cylinder mass="${laser_m}" radius="${laser_r}" length="${laser_l}">
+            <origin xyz="0.0 0.0 0" rpy="0 0 0"/>
+        </xacro:inertial_cylinder>
+        <visual>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="${laser_r}" length="${laser_l}"/>
+            </geometry>
+            <material name="red">
+                <color rgba="1 0 0 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="${laser_r}" length="${laser_l}"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <gazebo reference="laser_frame">
+        <material>Gazebo/Red</material>
+
+        <sensor name="laser" type="ray">
+            <pose> 0 0 0 0 0 0 </pose>
+            <visualize>true</visualize>
+            <update_rate>10</update_rate>
+            <ray>
+                <scan>
+                    <!-- <material>Gazebo/Red</material> -->
+                    <horizontal>
+                        <samples>360</samples>
+                        <min_angle>-3.14</min_angle>
+                        <max_angle>3.14</max_angle>
+                    </horizontal>
+                </scan>
+                <range>
+                    <min>0.3</min>
+                    <max>12</max>
+                </range>
+            </ray>
+            <plugin name="laser_controller" filename="libgazebo_ros_ray_sensor.so">
+                <ros>
+                    <!-- Scan can be seen at /laser_controller/out instead of /scan -->
+                    <!-- <argument>-ros-args -remap ~/out:=/scan</argument> -->
+                    <!-- <remapping>~/out:=/scan</remapping> -->
+                    <!-- <namespace>/</namespace> -->
+                    <argument>~/out:=scan</argument>
+                </ros>
+                <output_type>sensor_msgs/LaserScan</output_type>
+                <frame_name>laser_frame</frame_name>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+</robot>
