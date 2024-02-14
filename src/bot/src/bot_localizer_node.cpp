@@ -4,7 +4,6 @@
 #include <string>
 #include <cmath>
 #include <thread>
-// #include <numpy.hpp>
 #include <opencv2/opencv.hpp> 
 
 
@@ -24,9 +23,11 @@ class BotMapper
     BotMapper()
     {
         this->graphified=false;
-        this->crop_pixel=5;
+        this->crop_pixel=20;
 
     }
+    bool one_pass_called=false;
+
 
     void thinningIteration(cv::Mat& img, int iter)
     {
@@ -129,32 +130,59 @@ class BotMapper
         dst *= 255;
     }
 
-    void one_pass(cv::Mat img)
+    cv::Mat one_pass(cv::Mat img)
     {
-        cv::Mat maze_bgr;
-        cv::cvtColor(img,maze_bgr,cv::COLOR_GRAY2BGR);
+        std::cout<<"Onepass called"<<std::endl;
+        // cv::imshow("Received img",img);
+        
+        // cv::Mat maze_bgr;
+        // cv::cvtColor(img,maze_bgr,cv::COLOR_GRAY2BGR);
         // Create a window to display  Detected Interested Points
-        cv::namedWindow("Maze interest points",cv::WINDOW_FREERATIO);
+        // cv::namedWindow("Maze interest points",cv::WINDOW_FREERATIO);
         int rows =img.size[0];
         int columns =img.size[1];
-        for (int row=0;row<rows;row++)
+        int row=0;
+        int column=0;
+        cv::Mat out_img=img.clone();
+        cv::cvtColor(img,out_img,cv::COLOR_GRAY2BGR);
+        for (row=0;row<rows;row++)
         {
-            for (int column=0;column<columns;column++)
+            for (column=0;column<columns;column++)
             {
-                if(img.at<int>(row,column)==255)
+                if(img.at<uchar>(column,row)==255)
                 {
-
+                    // std::cout<<img.size[0]<<"&"<<img.size[1]<<"&"<<img.at<int>(row/2,column/2)<<std::endl;
+                    no_of_pathways=this->get_surround_pixel_intensities(img,row,column);
+                    std::cout<<no_of_pathways<<std::endl;
+                    cv::Point2f center;
+                    center.x=row;
+                    center.y=column;
+                    if(no_of_pathways==1)
+                    {
+                        cv::circle(out_img,center,10,cv::Scalar(0,0,255),2);
+                    }
+                    if(no_of_pathways==5)
+                    {
+                        cv::circle(out_img,center,10,cv::Scalar(255,0,0),2);
+                    }
+                    if(no_of_pathways==2 && this->turn)
+                    {
+                        cv::circle(out_img,center,10,cv::Scalar(0,255,0),2);
+                        this->turn=false;
+                    }
                 }
             }
         }
-
+        return out_img;
     }
 
-    void get_surround_pixel_intensities(cv::Mat img, int curr_row, int curr_col)
+    int get_surround_pixel_intensities(cv::Mat img, int curr_row, int curr_col)
     {
-        cv::threshold(img,img,1,1,cv::THRESH_BINARY);
+        //cv::threshold(img,img,1,1,cv::THRESH_BINARY);
+        
         int rows=img.size[0];
-        int column=img.size[1];
+        int columns=img.size[1];
+        // std::cout<<rows<<"&"<<columns<<std::endl;
 
         //State variables to check if our point is at the boundary condition
         bool top_row=false;
@@ -186,28 +214,27 @@ class BotMapper
             // Left col == col to left not accesible
             lft_col=true;
         }
-        if (curr_row==(rows-1))
+        if (curr_col==(columns-1))
         {
             // Right col == col to right is not accesible
             rgt_col=true;
         }
         //  Extracting surround pixel intensities and Addressing boundary conditions (if present)
-        if (top_row or lft_col)
+        if (top_row || lft_col)
         {
             top_left = 0;
         }
         else
         {
-            top_left = img.at<int>(curr_row-1,curr_col-1);
+            top_left = img.at<uchar>(curr_col-1,curr_row-1);
         }
-        if( top_row or rgt_col )
+        if( top_row || rgt_col )
         {
             top_rgt = 0;
         }
-            
         else
         {
-            top_rgt = img.at<int>(curr_row-1,curr_col+1);
+            top_rgt = img.at<uchar>(curr_col+1,curr_row-1);
         }
 
         if( btm_row or lft_col )
@@ -216,7 +243,7 @@ class BotMapper
         }
         else
         {
-            btm_left = img.at<int>(curr_row+1,curr_col-1);
+            btm_left = img.at<uchar>(curr_col-1,curr_row+1);
         }
 
         if( btm_row or rgt_col )
@@ -225,7 +252,7 @@ class BotMapper
         }
         else
         {
-            btm_rgt = img.at<int>(curr_row+1,curr_col+1);
+            btm_rgt = img.at<uchar>(curr_col+1,curr_row+1);
         }
         
         // If the point we are at is anywhere on the top row, Then
@@ -236,7 +263,7 @@ class BotMapper
         }
         else
         {
-            top = img.at<int>(curr_row-1,curr_col);
+            top = img.at<uchar>(curr_col,curr_row-1);
         }
         if (rgt_col)
         {
@@ -244,7 +271,7 @@ class BotMapper
         }
         else
         {
-            rgt = img.at<int>(curr_row,curr_col+1);
+            rgt = img.at<uchar>(curr_col+1,curr_row);
         }
         
         if (btm_row)
@@ -253,7 +280,7 @@ class BotMapper
         }
         else
         {
-            btm = img.at<int>(curr_row+1,curr_col);
+            btm = img.at<uchar>(curr_col,curr_row+1);
         }
 
         if (lft_col)
@@ -262,37 +289,33 @@ class BotMapper
         }
         else
         {
-            lft = img.at<int>(curr_row,curr_col-1);
+            lft = img.at<uchar>(curr_col-1,curr_row);
         }
 
         int no_of_pathways = ( top_left + top      + top_rgt  +
                            lft      + 0        + rgt      + 
                            btm_left + btm      + btm_rgt        
-                         );
-        if(no_of_pathways>2)
-        {  
-            std::cout<<"  [ top_left , top      , top_rgt  ,lft    , rgt      , btm_left , btm      , btm_rgt   ] \n [ "<<top_left<<" , "<<top<<" , "<<top_rgt<<" ,\n   "<<lft<<" , "<<"-"<<" , "<<rgt<<" ,\n   "<<btm_left<<" , "<<btm<<" , "<<btm_rgt<<" ] "<<std::endl;
-            std::cout<<"\nno_of_pathways [row,col]= [ "<<curr_row<<" , "<<curr_col<<" ] "<<no_of_pathways<<std::endl; 
-
-        }
-        this->top_left=top_left;
-        this->top=top;
-        this->top_rgt=top_rgt;
-        this->rgt=rgt;
-        this->btm_rgt=btm_rgt;
-        this->btm=btm;
-        this->btm_left=btm_left;
-        this->lft=lft;
-        this->no_of_pathways=no_of_pathways;
+                         )/255; 
+        if(no_of_pathways==2)
+        {
+            if ((top==255 && btm==255) || (lft==255 && rgt==255) || (btm_left==255 && top_rgt==255) || (btm_rgt==255 && top_left==255))
+            {
+                this->turn=false;
+            }
+            else
+            {
+                this->turn=true;
+            }
+        }      
+        return no_of_pathways;
     }
     
 
-    void graphify(cv::Mat extracted_maze)
+    void graphify(cv::Mat extracted_maze, bool is_one_pass_called)
     {
         std::cout<<"Graphipy Called"<<std::endl;
         if (not this->graphified)
         {
-            //cv::imshow("Extracted Maze",extracted_maze);
             // Thinning Operation on the maze
             cv::Mat thinned_img;
             thinning(extracted_maze,thinned_img);
@@ -302,19 +325,24 @@ class BotMapper
             cv::morphologyEx(thinned_img,thinned_dilated_img,cv::MORPH_CLOSE,kernel_);
             cv::threshold(thinned_dilated_img,thinned_dilated_img,0,255,cv::THRESH_BINARY | cv::THRESH_OTSU);
             thinning(thinned_dilated_img,thinned_img);
-            // cv::imshow("Thined img",thinned_dilated_img);
             //Remove the boundary pixels
-            cv::Rect region_of_interest(this->crop_pixel,this->crop_pixel,480-this->crop_pixel,480-this->crop_pixel);
+            cv::Rect region_of_interest(this->crop_pixel,this->crop_pixel,480-2*this->crop_pixel,480-2*this->crop_pixel);
             cv::Mat cropped_img=thinned_dilated_img(region_of_interest);
             cv::imshow("Cropped img",cropped_img);
-            //Overlay Map on the maze
-            this->one_pass(cropped_img);
+            //Pass it to the one_pass function to find the nodes
+            cv::Mat junction;
+            if(one_pass_called==false)
+            {
+                junction=this->one_pass(cropped_img);
+                cv::imshow("Junctions",junction);
+            }
         }
     }
 
     private:
     bool graphified=false;
     int crop_pixel=5;
+    bool turn=false;
     int top_left=0;
     int top_rgt = 0;
     int btm_left=0;
@@ -334,13 +362,11 @@ class BotLocalizer : public rclcpp::Node
     : Node("bot_localizer_node")
     {
         this->is_bg_extracted=false;
-        // this->bg_model=[];
-      subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-      "/unit_box/image_raw", 10, std::bind(&BotLocalizer::image_callback, this, _1));
+        subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
+            "/unit_box/image_raw", 10, std::bind(&BotLocalizer::image_callback, this, _1));
     }
   private:
-    bool is_bg_extracted=false;
-    // int bg_model=[];
+    mutable bool is_bg_extracted=true;
     mutable int  orig_X=0;
     mutable int orig_Y=0;
     mutable int orig_rows=0;
@@ -349,14 +375,14 @@ class BotLocalizer : public rclcpp::Node
     mutable cv::Point2f center_;
     mutable float radius_=0;
 
-    void localize_bot(cv::Mat curr_frame, cv::Mat frame_disp)
-    {
-        if (not this->is_bg_extracted)
-        {
-            this->extract_bg(curr_frame);
-            this->is_bg_extracted=true;
-        }
-    }
+    // void localize_bot(cv::Mat curr_frame, cv::Mat frame_disp)
+    // {
+    //     if (not this->is_bg_extracted)
+    //     {
+    //         this->extract_bg(curr_frame);
+    //         this->is_bg_extracted=true;
+    //     }
+    // }
     
     cv::Mat connect_edges(cv::Mat img) const
     {
@@ -370,7 +396,6 @@ class BotLocalizer : public rclcpp::Node
 
     int smallest_object_idx(std::vector<std::vector<cv::Point> > contours, int noise_thresh=20) const
     {
-      // RCLCPP_INFO(this->get_logger(), "smallest_bobect 1");
 
       int min_contour_area=100;
       int min_contour_idx=-1;
@@ -390,77 +415,75 @@ class BotLocalizer : public rclcpp::Node
     }
     cv::Mat extract_bg(cv::Mat frame) const
     {
-      //Extract the mask of all rois(Region of Interest)
-      //Convert the image to grayscale
+        //Extract the mask of all rois(Region of Interest)
+        //Convert the image to grayscale
 
-      cv::Mat gray_image;
-      cv::cvtColor(frame,gray_image,cv::COLOR_BGR2GRAY);
-      cv::imshow("grey_image",gray_image);
+        cv::Mat gray_image;
+        cv::cvtColor(frame,gray_image,cv::COLOR_BGR2GRAY);
+        cv::imshow("grey_image",gray_image);
 
-      //Detect the edges from the grascale image using Canny Edge detector
-      cv::Mat edges;
-      // Threshhold 1=50
-      // Threshhold 2=150
-      // aperture size=3
-      cv::Canny(gray_image,edges,25,80,3);
-      //Connect the disjoint images that are close enough
-      cv::imshow("edges",edges);
-      edges=this->connect_edges(edges);
-      //Find the contours in the image
-      std::vector<std::vector<cv::Point> > contours_;
-      cv::findContours(edges,contours_,cv::RETR_EXTERNAL,cv::CHAIN_APPROX_NONE);
-      
-      cv::Mat contourImage = cv::Mat::zeros(frame.size(), CV_8UC1);
-      //Loop and get ids of the contours
-        for (auto& cnt : contours_) {
-            //-1 thickness
-            cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{cnt}, 0, cv::Scalar(255), -1);
-        }
-      cv::imshow("Contours",contourImage);
-      //Extract the background model by 
-      //Removing the smallest object(bot from background)
-      int min_contour_idx=this->smallest_object_idx(contours_);
-      //Region of interset with no bot mask
-      cv::Mat roi_no_bot_mask=contourImage.clone();
-
-      //If the smallest Object in the foreground found
-      if( min_contour_idx != -1)
-      {
-        //0 is to remove        
-        cv::drawContours(roi_no_bot_mask, contours_, min_contour_idx, 0,-1);
+        //Detect the edges from the grascale image using Canny Edge detector
+        // Threshhold 1=50
+        // Threshhold 2=150
+        // aperture size=3
+        cv::Mat edges;
+        cv::Canny(gray_image,edges,25,80,3);
+        //Connect the disjoint images that are close enough
+        cv::imshow("edges",edges);
+        edges=this->connect_edges(edges);
+        //Find the contours in the image
+        std::vector<std::vector<cv::Point> > contours_;
+        cv::findContours(edges,contours_,cv::RETR_EXTERNAL,cv::CHAIN_APPROX_NONE);
         
-        // Draw dilated bot mask
-        cv::Mat bot_mask = cv::Mat::zeros(frame.size(), CV_8UC1);
-        cv::drawContours(bot_mask, contours_, min_contour_idx, 255,-1);
-        cv::drawContours(bot_mask, contours_, min_contour_idx, 255,3);
-        cv::imshow("Bot Mask",bot_mask);
-        //Find the bounding circle
-        cv::minEnclosingCircle(contours_[min_contour_idx],this->center_,this->radius_);
+        cv::Mat contourImage = cv::Mat::zeros(frame.size(), CV_8UC1);
+        //Loop and get ids of the contours
+            for (auto& cnt : contours_) {
+                //-1 thickness
+                cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{cnt}, 0, cv::Scalar(255), -1);
+            }
+        cv::imshow("Contours",contourImage);
+        //Extract the background model by 
+        //Removing the smallest object(bot from background)
+        int min_contour_idx=this->smallest_object_idx(contours_);
+        //Region of interset with no bot mask
+        cv::Mat roi_no_bot_mask=contourImage.clone();
 
-        cv::Mat not_car_mask;
-        cv::bitwise_not(bot_mask,not_car_mask);
-        cv::Mat frame_car_removed;
-        cv::bitwise_and(frame,frame,frame_car_removed,not_car_mask);
-        // Generate groud replica to fill in the area from where car is removed
-        cv::Mat base_clr=cv::Mat::zeros(frame_car_removed.size(), frame_car_removed.type());
-        cv::Mat ground_replica = cv::Mat::ones(frame_car_removed.size(), frame_car_removed.type());
-        cv::Mat bg_model;
+        //If the smallest Object in the foreground found
+        if( min_contour_idx != -1)
+        {
+            //0 is to remove        
+            cv::drawContours(roi_no_bot_mask, contours_, min_contour_idx, 0,-1);
+            
+            // Draw dilated bot mask
+            cv::Mat bot_mask = cv::Mat::zeros(frame.size(), CV_8UC1);
+            cv::drawContours(bot_mask, contours_, min_contour_idx, 255,-1);
+            cv::drawContours(bot_mask, contours_, min_contour_idx, 255,3);
+            cv::imshow("Bot Mask",bot_mask);
+            //Find the bounding circle
+            cv::minEnclosingCircle(contours_[min_contour_idx],this->center_,this->radius_);
 
-        cv::bitwise_and(ground_replica,ground_replica,bg_model,bot_mask);
-        cv::bitwise_or(bg_model,frame_car_removed,bg_model);
-      }
-      cv::Mat maze_occupancy_grid = cv::Mat::zeros(frame.size(), CV_8UC1);
-      cv::bitwise_not(roi_no_bot_mask,maze_occupancy_grid); 
-      cv::imshow("Occupancy Grid",maze_occupancy_grid);
-      return maze_occupancy_grid;
+            cv::Mat not_car_mask;
+            cv::bitwise_not(bot_mask,not_car_mask);
+            cv::Mat frame_car_removed;
+            cv::bitwise_and(frame,frame,frame_car_removed,not_car_mask);
+            // Generate groud replica to fill in the area from where car is removed
+            cv::Mat base_clr=cv::Mat::zeros(frame_car_removed.size(), frame_car_removed.type());
+            cv::Mat ground_replica = cv::Mat::ones(frame_car_removed.size(), frame_car_removed.type());
+            cv::Mat bg_model;
+
+            cv::bitwise_and(ground_replica,ground_replica,bg_model,bot_mask);
+            cv::bitwise_or(bg_model,frame_car_removed,bg_model);
+        }
+        cv::Mat maze_occupancy_grid = cv::Mat::zeros(frame.size(), CV_8UC1);
+        cv::bitwise_not(roi_no_bot_mask,maze_occupancy_grid); 
+        cv::imshow("Occupancy Grid",maze_occupancy_grid);
+        return maze_occupancy_grid;
     }
 
     
 
     void image_callback(const sensor_msgs::msg::Image & msg) const
     {
-
-  
     // Show Image inside a window 
       try
       {
@@ -477,8 +500,11 @@ class BotLocalizer : public rclcpp::Node
           RCLCPP_INFO(this->get_logger(), "Bot detected at X[%f] & Y[%f]",center_.x,center_.y);
           cv::circle(clr_img,center_,radius_,(0,0,255),2);
           cv::imshow("Top Camera Image",clr_img);
-          BotMapper bot_mapper;
-          bot_mapper.graphify(img);
+          if(this->is_bg_extracted==false){
+            BotMapper bot_mapper;
+            bot_mapper.graphify(img,this->is_bg_extracted);
+            this->is_bg_extracted=true;
+          }
         }
       }
       catch (cv_bridge::Exception &e)
