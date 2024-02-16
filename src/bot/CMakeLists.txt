@@ -84,6 +84,7 @@ add_executable(go_to_goal_node src/go_to_goal.cpp)
 add_executable(map_publisher_node src/map_publisher.cpp)
 add_executable(maze_solver_node src/maze_solver_node.cpp)
 add_executable(bot_localizer_node src/bot_localizer_node.cpp)
+add_executable(path_planner_node src/path_planner_node.cpp)
 add_executable(autonomy_node src/autonomy_node.cpp ${BEHAVIOR_SOURCES})
 # add_executable(navigation_behaviors src/navigation_behaviors.cpp)
 
@@ -96,6 +97,7 @@ ament_target_dependencies(go_to_goal_node rclcpp geometry_msgs nav_msgs)
 ament_target_dependencies(driving_node rclcpp geometry_msgs)
 ament_target_dependencies(maze_solver_node rclcpp sensor_msgs cv_bridge OpenCV)
 ament_target_dependencies(bot_localizer_node rclcpp sensor_msgs cv_bridge OpenCV)
+ament_target_dependencies(path_planner_node rclcpp sensor_msgs cv_bridge OpenCV)
 ament_target_dependencies(autonomy_node ${TARGET_DEPENDS})
 # ament_target_dependencies(navigation_behaviors rclcpp behaviortree_cpp)
 
@@ -105,6 +107,7 @@ target_compile_features(laser_remapper_node PUBLIC c_std_99 cxx_std_17)  # Requi
 target_link_libraries(autonomy_node ${YAML_CPP_LIBRARIES} /usr/local/lib/libbehaviortree_cpp.so)
 target_link_libraries(maze_solver_node ${OpenCV_LIBS})
 target_link_libraries(bot_localizer_node ${OpenCV_LIBS})
+target_link_libraries(path_planner_node ${OpenCV_LIBS})
 
 # target_link_libraries(${PROJECT_NAME} behaviortree_cpp)
 
@@ -118,6 +121,7 @@ install(TARGETS
   maze_solver_node
   # bot_mapper
   bot_localizer_node
+  path_planner_node
   # navigation_behaviors
   DESTINATION lib/${PROJECT_NAME}
 )
