@@ -122,7 +122,7 @@ class BotLocalizer : public rclcpp::Node
           min_contour_area = area;
           min_contour_idx = idx;
         }
-    //   RCLCPP_INFO(this->get_logger(), "Min Area [%d]",min_contour_area);        
+      RCLCPP_INFO(this->get_logger(), "Min Area [%d]",min_contour_area);        
       return min_contour_idx;
       }
     }
@@ -216,7 +216,7 @@ class BotLocalizer : public rclcpp::Node
           img=this->extract_bg(img);
           cv::Mat clr_img;
           cv::cvtColor(img,clr_img,cv::COLOR_GRAY2BGR);
-        //   RCLCPP_INFO(this->get_logger(), "Bot detected at X[%d] & Y[%d]",center_.x,center_.y);
+          RCLCPP_INFO(this->get_logger(), "Bot detected at X[%d] & Y[%d]",center_.x,center_.y);
           pt.x=center_.x;
           pt.y=center_.y;
           pt.z=0;
@@ -241,23 +241,21 @@ class BotLocalizer : public rclcpp::Node
         RCLCPP_INFO(this->get_logger(), "Goal callback called");
         RCLCPP_INFO(this->get_logger(), "msg data [%d]",msg.data);
         cv::Point2i goal_pt =this->end_pts[msg.data];
-        RCLCPP_INFO(this->get_logger(), "Goal for a stasr X[%d] Y[%d]",goal_pt.x,goal_pt.y);
         int current_node_idx=this->nearest_node(center_);
-        RCLCPP_INFO(this->get_logger(), "nearest node idx [%d]",current_node_idx);
+        RCLCPP_INFO(this->get_logger(), "Nearest node idx [%d]",current_node_idx);
         RCLCPP_INFO(this->get_logger(), "Nearest node X[%d] Y[%d]",nodes_[current_node_idx].x,nodes_[current_node_idx].y);
         this->a_star_img=this->cropped_img.clone();
         cv::cvtColor(this->a_star_img,this->a_star_img,cv::COLOR_GRAY2BGR);
         int found=a_star(0,nodes_[current_node_idx],goal_pt);
         if (found==1)
         {
-            RCLCPP_INFO(this->get_logger(), "Solution found");
-            RCLCPP_INFO(this->get_logger(), "Pathway Size [%d]",this->pathway.size());
             cv::Mat path_img=this->cropped_img.clone();
+            cv::cvtColor(path_img,path_img,cv::COLOR_GRAY2BGR);
             //Draw the path ways
             for (int k=0;k<this->pathway.size();k++){
-                cv::circle(path_img,pathway.at(k),1,cv::Scalar(255,0,0));
+                cv::circle(path_img,pathway.at(k),1,cv::Scalar(0,255,0));
             }
-            cv::imshow("Path Image",path_img);
+            cv::imshow("Shortest Path",path_img);
         }
         else if(found==-1)
         {
@@ -295,6 +293,10 @@ class BotLocalizer : public rclcpp::Node
         return false;
     }
 
+    bool are_neighbor(cv::Point2i pt1,cv::Point2i pt2) const
+    {
+        return(abs(pt1.x-pt2.x)<2 && abs(pt1.y-pt2.y)<2);
+    }
     // 0 visited node ,1 solution found, -1 no solution
     int a_star(int current_cost,cv::Point2i current_,cv::Point2i goal_) const
     {   
@@ -303,7 +305,7 @@ class BotLocalizer : public rclcpp::Node
         RCLCPP_INFO(this->get_logger(), "Goal X[%d] Y[%d]",goal_.x,goal_.y);
         RCLCPP_INFO(this->get_logger(), "Open Node sixe [%d]",this->open_nodes_.size());
         cv::circle(this->a_star_img,current_,2,cv::Scalar(255,0,0));
-        cv::imshow("A Star Traversal",this->a_star_img);
+        cv::imshow("A Star Search",this->a_star_img);
         if(is_visited(current_)==true)
         {
             RCLCPP_INFO(this->get_logger(), "Visited Node");
@@ -359,8 +361,11 @@ class BotLocalizer : public rclcpp::Node
             }
             if(found==1)
             {
-                RCLCPP_INFO(this->get_logger(), "Goal Node Found in child");
-                pathway.push_back(current_);
+                RCLCPP_INFO(this->get_logger(), "Goal Node Found in child Node");
+                if(this->are_neighbor(current_,pathway.back()))
+                {
+                    pathway.push_back(current_);
+                }
                 return 1;
             }
             }
@@ -787,96 +792,3 @@ int main(int argc, char * argv[])
   rclcpp::shutdown();
   return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    //Affine transformation because translation b/w origin 
-//     cv::Mat transformPoints(const std::vector<cv::Point2i>& pointsA, const std::vector<cv::Point2i>& pointsB) const
-// {
-//     // Create matrices to store points
-//     cv::Mat srcPoints(3, 2, CV_32FC1);
-//     cv::Mat dstPoints(3, 2, CV_32FC1);
-
-//     // Fill matrices with point coordinates
-//     for (int i = 0; i < 3; ++i) {
-//         srcPoints.at<float>(i, 0) = pointsA[i].x;
-//         srcPoints.at<float>(i, 1) = pointsA[i].y;
-//         dstPoints.at<float>(i, 0) = pointsB[i].x;
-//         dstPoints.at<float>(i, 1) = pointsB[i].y;
-//     }
-
-//     // Calculate affine transformation matrix
-//     cv::Mat transformationMatrix = cv::estimateAffine2D(srcPoints, dstPoints);
-
-//     return transformationMatrix;
-// }
-
-// geometry_msgs::msg::Point img_to_odom(cv::Point2i pt) const
-// {
-//     geometry_msgs::msg::Point result;
-//     result.z = 0;
-
-//     // Points in image coordinates 
-//     std::vector<cv::Point2i> pointsA = {{238, 167}, {201, 136}, {218, 150}};
-//     // Corresponding points in odom
-//     std::vector<cv::Point2i> pointsB = {{0.25, 0.01}, {6.93, 6.96}, {1.92, 1.94}};
-//     cv::Mat transformationMatrix = transformPoints(pointsA, pointsB);
-
-//     // Apply affine transformation to the input point
-//     // result.x = transformationMatrix.at<float>(0, 0) * pt.x + transformationMatrix.at<float>(1, 0) * pt.y + transformationMatrix.at<float>(2,0);
-//     // result.y = transformationMatrix.at<float>(0, 1) * pt.x + transformationMatrix.at<float>(1, 1) * pt.y + transformationMatrix.at<float>(2,1);
-//     result.x = -0.0080069 * pt.x + 0.0075811 * pt.y-1.5190211;
-//     result.y = 0.0066128 * pt.x + 0.0072059 * pt.y-1.8523305;
-//     std::cout<<"Affine Matrix"<<"["<<transformationMatrix.at<float>(0, 0)<<std::endl;
-//     std::cout << "Transformed point: (" << result.x << ", " << result.y << ")" << std::endl;
-
-//     return result;
-// }
- // std_msgs::msg::Header header; // empty header
-        // cv_bridge::CvImage img_bridge;
-        // sensor_msgs::msg::Image img_msg;
-        // img_bridge = cv_bridge::CvImage(header,sensor_msgs::image_encodings::BGR8,path_img);
-        // img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
-        // Convert the OpenCV image to a ROS2 sensor_msgs::Image message
-        // cv::imshow("Path Image",path_img);
-        // cv_bridge::CvImage cv_image(std_msgs::msg::Header(), "bgr8", path_img);
-        // sensor_msgs::msg::Image::SharedPtr ros_image = cv_image.toImageMsg();
-        // // Publish the ROS2 Image message
-        // img_publisher_->publish(*ros_image);
-        // img_publisher_->publish(img_msg);
-        // location_publisher_->publish(pt);
