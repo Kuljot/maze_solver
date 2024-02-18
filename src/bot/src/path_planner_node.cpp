@@ -28,17 +28,6 @@ class PathPlanner : public rclcpp::Node
     float goal_pose_x;
     float goal_pose_y;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr publisher_;
-
-    // void img_to_location(geometry_msgs::msg::Point pt)
-    // {
-    //     geometry_msgs::msg::Point result;
-    //     result.z=0;
-    //     double M[2][2]={ 
-    //             {0.0976, 0.0180},
-    //             {-0.1371, -0.0254}};
-    //     result.x=pt.x*M[0][0]+pt.y*M[1][0];
-    //     result.y=pt.x*M[0][1]+pt.y*M[1][1];
-    // }
 };
 
 int main(int argc, char * argv[])

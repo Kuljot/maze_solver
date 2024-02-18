@@ -6,6 +6,7 @@
 #include <thread>
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include <geometry_msgs/msg/point.hpp>
 #include "nav_msgs/msg/odometry.hpp"
 
 
@@ -71,7 +72,7 @@ class Quaternion
 class GoToGoal : public rclcpp::Node
 {
   public:
-    GoToGoal(float goal_pose_x, float goal_pose_y)
+    GoToGoal(float goal_pose_x=NULL, float goal_pose_y=NULL)
     : Node("go_to_goal_node")
     {
       this->goal_pose.position.x=goal_pose_x;
@@ -81,6 +82,8 @@ class GoToGoal : public rclcpp::Node
                   rclcpp::QoS(rclcpp::KeepLast(10)).transient_local());
       subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "/odom", 10, std::bind(&GoToGoal::vel_callback, this, _1));
+      goal_subscription_ = this->create_subscription<geometry_msgs::msg::Point>(
+      "/go_to_goal", 10, std::bind(&GoToGoal::goal_callback, this, _1));
     }
   private:
     mutable geometry_msgs::msg::Pose current_pose;
@@ -103,59 +106,70 @@ class GoToGoal : public rclcpp::Node
 
     
     void vel_callback(const nav_msgs::msg::Odometry & msg) const
-{
-    geometry_msgs::msg::Twist vel_msg;
-    this->current_pose.position.x = msg.pose.pose.position.x;
-    this->current_pose.position.y = msg.pose.pose.position.y;
-
-    auto quaternion = msg.pose.pose.orientation;
-
-    Quaternion q(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-
-    float yaw = q.get_yaw();
-    if(this->reached==false)
     {
-        if (distance()>this->goal_tollerance)
+    if(this->goal_pose.position.x!=NULL && this->goal_pose.position.y!=NULL)
+    {
+        geometry_msgs::msg::Twist vel_msg;
+        this->current_pose.position.x = msg.pose.pose.position.x;
+        this->current_pose.position.y = msg.pose.pose.position.y;
+
+        auto quaternion = msg.pose.pose.orientation;
+
+        Quaternion q(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+
+        float yaw = q.get_yaw();
+        if(this->reached==false)
         {
-            RCLCPP_INFO(this->get_logger(), "Current location is X[%f] & Y[%f]", this->current_pose.position.x, this->current_pose.position.y);
-            RCLCPP_INFO(this->get_logger(), "Distance is [%f]", distance());
-            RCLCPP_INFO(this->get_logger(), "Angle Diff is [%f]", angle_diff(yaw));
-            if (std::abs(angle_diff(yaw)) > M_PI / 36)
+            if (distance()>this->goal_tollerance)
             {
+                RCLCPP_INFO(this->get_logger(), "Goal location is X[%f] & Y[%f]", this->goal_pose.position.x, this->goal_pose.position.y);
+                RCLCPP_INFO(this->get_logger(), "Current location is X[%f] & Y[%f]", this->current_pose.position.x, this->current_pose.position.y);
+                RCLCPP_INFO(this->get_logger(), "Distance is [%f]", distance());
                 RCLCPP_INFO(this->get_logger(), "Angle Diff is [%f]", angle_diff(yaw));
-                if (angle_diff(yaw) < 0)
+                if (std::abs(angle_diff(yaw)) > M_PI / 36)
                 {
-                    vel_msg.linear.x = -0.5;
+                    RCLCPP_INFO(this->get_logger(), "Angle Diff is [%f]", angle_diff(yaw));
+                    if (angle_diff(yaw) < 0)
+                    {
+                        vel_msg.linear.x = -0.5;
+                    }
+                    else
+                    {
+                        vel_msg.linear.x = 0.5;
+                    }
+                    vel_pub->publish(vel_msg);
+                    RCLCPP_INFO(this->get_logger(), "Publishing Angular Velocity");
                 }
                 else
                 {
-                    vel_msg.linear.x = 0.5;
+                    vel_msg.linear.x = 0;
+                    RCLCPP_INFO(this->get_logger(), "Stop angular motion");
+                    if (distance() > this->goal_tollerance)
+                    {
+                        RCLCPP_INFO(this->get_logger(), "Go to goal linear motion");
+                        vel_msg.angular.z = -1; // Forward linear velocity when turning stops
+                        vel_pub->publish(vel_msg);
+                    }
+                    else
+                    {
+                        RCLCPP_INFO(this->get_logger(), "Stop linear motion");
+                        this->reached = true;
+                        vel_msg.angular.z = 0; // Stop linear velocity
+                        vel_pub->publish(vel_msg);
+                    }
                 }
-                vel_pub->publish(vel_msg);
-                RCLCPP_INFO(this->get_logger(), "Publishing Angular Velocity");
             }
             else
             {
+                RCLCPP_INFO(this->get_logger(), "Stop linear motion");
+                this->reached = true;
+                vel_msg.angular.z = 0;
                 vel_msg.linear.x = 0;
-                RCLCPP_INFO(this->get_logger(), "Stop angular motion");
-                if (distance() > this->goal_tollerance)
-                {
-                    RCLCPP_INFO(this->get_logger(), "Go to goal linear motion");
-                    vel_msg.angular.z = -1; // Forward linear velocity when turning stops
-                    vel_pub->publish(vel_msg);
-                }
-                else
-                {
-                    RCLCPP_INFO(this->get_logger(), "Stop linear motion");
-                    this->reached = true;
-                    vel_msg.angular.z = 0; // Stop linear velocity
-                    vel_pub->publish(vel_msg);
-                }
+                vel_pub->publish(vel_msg);
             }
         }
         else
         {
-            RCLCPP_INFO(this->get_logger(), "Stop linear motion");
             this->reached = true;
             vel_msg.angular.z = 0;
             vel_msg.linear.x = 0;
@@ -164,16 +178,26 @@ class GoToGoal : public rclcpp::Node
     }
     else
     {
-        this->reached = true;
-        vel_msg.angular.z = 0;
-        vel_msg.linear.x = 0;
-        vel_pub->publish(vel_msg);
+        RCLCPP_INFO(this->get_logger(), "Goal not received yet");
     }
-}
+    }
+
+
+    void goal_callback(const geometry_msgs::msg::Point  & msg) const
+    {
+        std::cout<<"Received msg"<<std::endl;
+        std::cout<<msg.x<<std::endl;
+        std::cout<<msg.y<<std::endl;
+        this->reached=false;
+        this->goal_pose.position.x=msg.x;
+        this->goal_pose.position.y=msg.y;
+    }
+    
     
 
     rclcpp::TimerBase::SharedPtr vel_timer;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_;
+    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr goal_subscription_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_pub;
 
 };
@@ -181,14 +205,16 @@ class GoToGoal : public rclcpp::Node
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  if (argc != 3)
+  if (argc == 3)
     {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Usage: %s <goal_pose_x> <goal_pose_y>", argv[0]);
-        return 1;
+        // RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Usage: %s <goal_pose_x> <goal_pose_y>", argv[0]);
+        // return 1;
+        float goal_pose_x=std::stof(argv[1]);
+        float goal_pose_y=std::stof(argv[2]);
+        rclcpp::spin(std::make_shared<GoToGoal>(goal_pose_x,goal_pose_y));
     }
-  float goal_pose_x=std::stof(argv[1]);
-  float goal_pose_y=std::stof(argv[2]);
-  rclcpp::spin(std::make_shared<GoToGoal>(goal_pose_x,goal_pose_y));
+  rclcpp::spin(std::make_shared<GoToGoal>());
   rclcpp::shutdown();
   return 0;
+
 }

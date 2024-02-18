@@ -4,6 +4,8 @@
 #include <string>
 #include <cmath>
 #include <thread>
+#include <queue>
+#include <utility>
 #include <unordered_map>
 #include <opencv2/opencv.hpp> 
 #include <sstream>
@@ -12,6 +14,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/int32.hpp"
 #include "cv_bridge/cv_bridge.h"
 #include <geometry_msgs/msg/point.hpp>
 // #include "bot_mapper.cpp"
@@ -21,7 +24,22 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 
 
-
+struct GraphNode
+{
+    float F; //Fvalue of the node
+    cv::Point2i parent;//Parent Node
+    cv::Point2i location;//Self location
+    
+    //Comparison operation for the priority queue
+    bool operator<(const GraphNode & other) const
+    {
+        return this->F > other.F;
+    }
+    bool operator>(const GraphNode & other) const
+    {
+        return this->F < other.F;
+    }
+};
 class BotLocalizer : public rclcpp::Node
 {
   public:
@@ -29,13 +47,17 @@ class BotLocalizer : public rclcpp::Node
     : Node("bot_localizer_node")
     {
         this->graphified=false;
-        this->crop_pixel=20;
+        this->crop_pixel=5;
         this->is_bg_extracted=false;
         this->one_pass_called=false;
         subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
             "/unit_box/image_raw", 10, std::bind(&BotLocalizer::image_callback, this, _1));
+        goal_subscription_ = this->create_subscription<std_msgs::msg::Int32>(
+            "/goal_node", 10, std::bind(&BotLocalizer::goal_callback, this, _1));
+        reached_subscription_ = this->create_subscription<std_msgs::msg::Int32>(
+            "/reached", 10, std::bind(&BotLocalizer::goal_callback, this, _1));
         img_publisher_ = this->create_publisher<sensor_msgs::msg::Image>("path_img", 1);
-        location_publisher_=this->create_publisher<geometry_msgs::msg::Point>("bot_location_in_image", 1);
+        goal_publisher_=this->create_publisher<geometry_msgs::msg::Point>("go_to_goal", 1);
     }
   private:
     mutable bool is_bg_extracted=true;
@@ -44,7 +66,7 @@ class BotLocalizer : public rclcpp::Node
     mutable int orig_rows=0;
     mutable int orig_cols=0;
     mutable int orig_rot=0;
-    mutable cv::Point2f center_;
+    mutable cv::Point2i center_;
     mutable float radius_=0;
     mutable bool graphified=false;
     mutable bool one_pass_called=false;
@@ -59,9 +81,21 @@ class BotLocalizer : public rclcpp::Node
     mutable int btm=0;
     mutable int lft=0;
     mutable int no_of_pathways=0;
+    //index,no of pathways,coordinates on image
+    mutable std::vector<cv::Point2i> end_pts;
+    mutable std::vector<cv::Point2i> tri_pts;
+    mutable std::vector<cv::Point2i> turn_pts;
+    mutable std::vector<cv::Point2i> nodes_;
+    mutable std::priority_queue<GraphNode> open_nodes_;
+    mutable std::vector<cv::Point2i> visited_nodes_;
+    mutable std::vector<cv::Point2i> pathway;
+    mutable cv::Mat cropped_img;
+    mutable cv::Mat a_star_img;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr goal_subscription_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr reached_subscription_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr img_publisher_;
-    rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr location_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr goal_publisher_;
 
     cv::Mat connect_edges(cv::Mat img) const
     {
@@ -88,7 +122,7 @@ class BotLocalizer : public rclcpp::Node
           min_contour_area = area;
           min_contour_idx = idx;
         }
-      RCLCPP_INFO(this->get_logger(), "Min Area [%d]",min_contour_area);        
+    //   RCLCPP_INFO(this->get_logger(), "Min Area [%d]",min_contour_area);        
       return min_contour_idx;
       }
     }
@@ -139,8 +173,12 @@ class BotLocalizer : public rclcpp::Node
             cv::drawContours(bot_mask, contours_, min_contour_idx, 255,3);
             cv::imshow("Bot Mask",bot_mask);
             //Find the bounding circle
-            cv::minEnclosingCircle(contours_[min_contour_idx],this->center_,this->radius_);
-
+            cv::Point2f float_center;
+            float_center.x=this->center_.x +0.0;
+            float_center.y=this->center_.y +0.0;
+            cv::minEnclosingCircle(contours_[min_contour_idx],float_center,this->radius_);
+            this->center_.x=float_center.x;
+            this->center_.y=float_center.y;
             cv::Mat not_car_mask;
             cv::bitwise_not(bot_mask,not_car_mask);
             cv::Mat frame_car_removed;
@@ -178,7 +216,7 @@ class BotLocalizer : public rclcpp::Node
           img=this->extract_bg(img);
           cv::Mat clr_img;
           cv::cvtColor(img,clr_img,cv::COLOR_GRAY2BGR);
-          RCLCPP_INFO(this->get_logger(), "Bot detected at X[%f] & Y[%f]",center_.x,center_.y);
+        //   RCLCPP_INFO(this->get_logger(), "Bot detected at X[%d] & Y[%d]",center_.x,center_.y);
           pt.x=center_.x;
           pt.y=center_.y;
           pt.z=0;
@@ -189,29 +227,144 @@ class BotLocalizer : public rclcpp::Node
             this->is_bg_extracted=true;
           }
         }
-        // std_msgs::msg::Header header; // empty header
-        // cv_bridge::CvImage img_bridge;
-        // sensor_msgs::msg::Image img_msg;
-        // img_bridge = cv_bridge::CvImage(header,sensor_msgs::image_encodings::BGR8,path_img);
-        // img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
-        // Convert the OpenCV image to a ROS2 sensor_msgs::Image message
-        // cv::imshow("Path Image",path_img);
-        // cv_bridge::CvImage cv_image(std_msgs::msg::Header(), "bgr8", path_img);
-        // sensor_msgs::msg::Image::SharedPtr ros_image = cv_image.toImageMsg();
-        // // Publish the ROS2 Image message
-        // img_publisher_->publish(*ros_image);
-        // img_publisher_->publish(img_msg);
-        location_publisher_->publish(pt);
-
       }
       catch (cv_bridge::Exception &e)
       {
          RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
         return;
       }
-      
       cv::waitKey(1);
-        
+    }
+
+    void goal_callback(const std_msgs::msg::Int32 & msg) const
+    {
+        RCLCPP_INFO(this->get_logger(), "Goal callback called");
+        RCLCPP_INFO(this->get_logger(), "msg data [%d]",msg.data);
+        cv::Point2i goal_pt =this->end_pts[msg.data];
+        RCLCPP_INFO(this->get_logger(), "Goal for a stasr X[%d] Y[%d]",goal_pt.x,goal_pt.y);
+        int current_node_idx=this->nearest_node(center_);
+        RCLCPP_INFO(this->get_logger(), "nearest node idx [%d]",current_node_idx);
+        RCLCPP_INFO(this->get_logger(), "Nearest node X[%d] Y[%d]",nodes_[current_node_idx].x,nodes_[current_node_idx].y);
+        this->a_star_img=this->cropped_img.clone();
+        cv::cvtColor(this->a_star_img,this->a_star_img,cv::COLOR_GRAY2BGR);
+        int found=a_star(0,nodes_[current_node_idx],goal_pt);
+        if (found==1)
+        {
+            RCLCPP_INFO(this->get_logger(), "Solution found");
+            RCLCPP_INFO(this->get_logger(), "Pathway Size [%d]",this->pathway.size());
+            cv::Mat path_img=this->cropped_img.clone();
+            //Draw the path ways
+            for (int k=0;k<this->pathway.size();k++){
+                cv::circle(path_img,pathway.at(k),1,cv::Scalar(255,0,0));
+            }
+            cv::imshow("Path Image",path_img);
+        }
+        else if(found==-1)
+        {
+            RCLCPP_INFO(get_logger(),"No Solution Found");
+        }
+        cv::waitKey(1);
+    }
+    
+    bool is_valid(cv::Point2i pt) const
+    {
+        if ((pt.x<0 || pt.x>470)||(pt.y<0 || pt.y>470)){
+            return false;
+
+        }
+        if (this->cropped_img.at<uchar>(pt.y,pt.x)!=255){
+            return false;
+        }
+        return true;
+    }
+
+    float h_value(cv::Point2i current_,cv::Point2i goal_) const
+    {
+        return cv::norm(goal_-current_);
+    }
+
+    bool is_visited(cv::Point2i pt) const
+    {
+        for(int k=0;k<this->visited_nodes_.size();k++)
+        {
+            if(visited_nodes_.at(k).x==pt.x && visited_nodes_.at(k).y==pt.y)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 0 visited node ,1 solution found, -1 no solution
+    int a_star(int current_cost,cv::Point2i current_,cv::Point2i goal_) const
+    {   
+        RCLCPP_INFO(this->get_logger(), "A Star called [%d]",current_cost);
+        RCLCPP_INFO(this->get_logger(), "Current X[%d] Y[%d]",current_.x,current_.y);
+        RCLCPP_INFO(this->get_logger(), "Goal X[%d] Y[%d]",goal_.x,goal_.y);
+        RCLCPP_INFO(this->get_logger(), "Open Node sixe [%d]",this->open_nodes_.size());
+        cv::circle(this->a_star_img,current_,2,cv::Scalar(255,0,0));
+        cv::imshow("A Star Traversal",this->a_star_img);
+        if(is_visited(current_)==true)
+        {
+            RCLCPP_INFO(this->get_logger(), "Visited Node");
+            return 0;
+        }
+        else if((current_.x==goal_.x && current_.y==goal_.y))
+        {
+            RCLCPP_INFO(this->get_logger(), "Goal Node");
+            pathway.push_back(current_);
+            return 1;
+        }
+        else{
+            RCLCPP_INFO(this->get_logger(), "Not Visited Node");
+            visited_nodes_.push_back(current_);
+            RCLCPP_INFO(this->get_logger(), "Visited Node size [%d]",visited_nodes_.size());
+            RCLCPP_INFO(this->get_logger(), "Not Goal Node");
+            for(int j=-1; j<2;j++) //y
+            {
+                for(int i=-1; i<2;i++)//x
+                {
+                    cv::Point2i pt;
+                    pt.x=current_.x+j;
+                    pt.y=current_.y+i;
+                    if(!is_visited(pt)==true)
+                    {
+                        GraphNode n;
+                        n.F=current_cost+h_value(pt,goal_)+1;
+                        n.parent=current_;
+                        n.location=pt;
+                        if(is_valid(pt)){
+                            RCLCPP_INFO(this->get_logger(), "Addind X[%d] Y[%d]",pt.x,pt.y);
+                            RCLCPP_INFO(this->get_logger(), "G[%f]",n.F);
+                            this->open_nodes_.push(n);
+                        }
+                    }
+                }
+            }
+            if (open_nodes_.size()==0)
+            {
+                return -1;
+            }
+            int found=0;
+            while(open_nodes_.size()>0 && found!=1)
+            {
+                GraphNode nxt_node=open_nodes_.top();
+                open_nodes_.pop();
+                RCLCPP_INFO(this->get_logger(), "Open Nodes Pop");
+                RCLCPP_INFO(this->get_logger(), "G value [%f]",nxt_node.F);
+                cv::Point2i nxt_pt;
+                nxt_pt.x=nxt_node.location.x;
+                nxt_pt.y=nxt_node.location.y;
+                found=a_star(current_cost+1,nxt_pt,goal_);
+            }
+            if(found==1)
+            {
+                RCLCPP_INFO(this->get_logger(), "Goal Node Found in child");
+                pathway.push_back(current_);
+                return 1;
+            }
+            }
+            return 0;
     }
 
     void thinningIteration(cv::Mat& img, int iter) const
@@ -326,9 +479,7 @@ class BotLocalizer : public rclcpp::Node
         int column=0;
         int node_no=0;
         int cnt=0;
-        std::vector<cv::Point2f> end_pts;
-        std::vector<cv::Point2f> tri_pts;
-        std::vector<cv::Point2f> turn_pts;
+        
         // Graph g;
         cv::Mat out_img=img.clone();
         cv::cvtColor(img,out_img,cv::COLOR_GRAY2BGR);
@@ -341,7 +492,7 @@ class BotLocalizer : public rclcpp::Node
                     // std::cout<<img.size[0]<<"&"<<img.size[1]<<"&"<<img.at<int>(row/2,column/2)<<std::endl;
                     no_of_pathways=this->get_surround_pixel_intensities(img,row,column);
                     // std::cout<<no_of_pathways<<std::endl;
-                    cv::Point2f center;
+                    cv::Point2i center;
                     center.x=row;
                     center.y=column;
                     // bool added=g.add_node(center,no_of_pathways);
@@ -417,19 +568,34 @@ class BotLocalizer : public rclcpp::Node
                             if(present==false)
                             {
                                 turn_pts.push_back(center);
-                                // cv::putText(out_img,std::to_string(tri_pts.size()),center,cv::FONT_HERSHEY_DUPLEX,1,cv::Scalar(255,0,0));
                                 cv::circle(out_img,center,10,cv::Scalar(0,255,0),0.2);
                             }
                         }
                         this->turn=false;
                     }
                 }
+
             }
         }
         
-        // for (int i=0;i<g.graph.size();i++){
-        //     std::cout<<"GRAPH"<<i<<g.graph[i]<<std::endl;
-        // }
+        for (int i=0;i<end_pts.size();i++){
+            // GraphNode n;
+            // n.pathways=2;
+            // n.en=end_pts[i];
+            this->nodes_.push_back(end_pts.at(i));
+        }
+        for (int i=0;i<turn_pts.size();i++){
+            // GraphNode n;
+            // n.pathways=2;
+            // n.point=turn_pts[i];
+            this->nodes_.push_back(turn_pts.at(i));
+        }
+        for (int i=0;i<tri_pts.size();i++){
+            // GraphNode n;
+            // n.pathways=3;
+            // n.point=tri_pts[i];
+            this->nodes_.push_back(tri_pts.at(i));
+        }
         return out_img;
     }
 
@@ -571,7 +737,7 @@ class BotLocalizer : public rclcpp::Node
     cv::Mat graphify(cv::Mat extracted_maze, bool is_one_pass_called) const
     {
         std::cout<<"Graphipy Called"<<std::endl;
-        cv::Mat cropped_img;
+        
         if (not this->graphified)
         {
             // Thinning Operation on the maze
@@ -595,22 +761,25 @@ class BotLocalizer : public rclcpp::Node
             }
         }
         cv::imshow("Cropped img",cropped_img);
-        //Save the image
-        std::string file_path = "/home/kuljot/Project/maze_solver/maze_solver/src/bot/maps/cropped_image.png"; // Specify the file path
-        cv::imwrite(file_path, cropped_img);
-
-        // cv_bridge::CvImage cv_image(std_msgs::msg::Header(), "bgr8", cropped_img);
-        // sensor_msgs::msg::Image::SharedPtr ros_image = cv_image.toImageMsg();
-        // // Publish the ROS2 Image message
-        // this->img_publisher_->publish(*ros_image);
         return cropped_img;
     }
 
-    
-    
-    
+    int nearest_node(cv::Point2i pt) const
+    {
+        int smallest_idx=0;
+        float smallest_dist=1000;
+        RCLCPP_INFO(this->get_logger(), "Nodes Size [%d]",this->nodes_.size());
+        RCLCPP_INFO(this->get_logger(), "Nodes Size local [%d]",nodes_.size());
+        for (int i=0;i<nodes_.size();i++){
+            if (cv::norm(nodes_[i]-pt)<smallest_dist)
+            {
+                smallest_dist=cv::norm(nodes_[i]-pt);
+                smallest_idx=i;
+            }
+        }
+        return smallest_idx;
+    }
 };
-
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
@@ -619,3 +788,95 @@ int main(int argc, char * argv[])
   return 0;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //Affine transformation because translation b/w origin 
+//     cv::Mat transformPoints(const std::vector<cv::Point2i>& pointsA, const std::vector<cv::Point2i>& pointsB) const
+// {
+//     // Create matrices to store points
+//     cv::Mat srcPoints(3, 2, CV_32FC1);
+//     cv::Mat dstPoints(3, 2, CV_32FC1);
+
+//     // Fill matrices with point coordinates
+//     for (int i = 0; i < 3; ++i) {
+//         srcPoints.at<float>(i, 0) = pointsA[i].x;
+//         srcPoints.at<float>(i, 1) = pointsA[i].y;
+//         dstPoints.at<float>(i, 0) = pointsB[i].x;
+//         dstPoints.at<float>(i, 1) = pointsB[i].y;
+//     }
+
+//     // Calculate affine transformation matrix
+//     cv::Mat transformationMatrix = cv::estimateAffine2D(srcPoints, dstPoints);
+
+//     return transformationMatrix;
+// }
+
+// geometry_msgs::msg::Point img_to_odom(cv::Point2i pt) const
+// {
+//     geometry_msgs::msg::Point result;
+//     result.z = 0;
+
+//     // Points in image coordinates 
+//     std::vector<cv::Point2i> pointsA = {{238, 167}, {201, 136}, {218, 150}};
+//     // Corresponding points in odom
+//     std::vector<cv::Point2i> pointsB = {{0.25, 0.01}, {6.93, 6.96}, {1.92, 1.94}};
+//     cv::Mat transformationMatrix = transformPoints(pointsA, pointsB);
+
+//     // Apply affine transformation to the input point
+//     // result.x = transformationMatrix.at<float>(0, 0) * pt.x + transformationMatrix.at<float>(1, 0) * pt.y + transformationMatrix.at<float>(2,0);
+//     // result.y = transformationMatrix.at<float>(0, 1) * pt.x + transformationMatrix.at<float>(1, 1) * pt.y + transformationMatrix.at<float>(2,1);
+//     result.x = -0.0080069 * pt.x + 0.0075811 * pt.y-1.5190211;
+//     result.y = 0.0066128 * pt.x + 0.0072059 * pt.y-1.8523305;
+//     std::cout<<"Affine Matrix"<<"["<<transformationMatrix.at<float>(0, 0)<<std::endl;
+//     std::cout << "Transformed point: (" << result.x << ", " << result.y << ")" << std::endl;
+
+//     return result;
+// }
+ // std_msgs::msg::Header header; // empty header
+        // cv_bridge::CvImage img_bridge;
+        // sensor_msgs::msg::Image img_msg;
+        // img_bridge = cv_bridge::CvImage(header,sensor_msgs::image_encodings::BGR8,path_img);
+        // img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
+        // Convert the OpenCV image to a ROS2 sensor_msgs::Image message
+        // cv::imshow("Path Image",path_img);
+        // cv_bridge::CvImage cv_image(std_msgs::msg::Header(), "bgr8", path_img);
+        // sensor_msgs::msg::Image::SharedPtr ros_image = cv_image.toImageMsg();
+        // // Publish the ROS2 Image message
+        // img_publisher_->publish(*ros_image);
+        // img_publisher_->publish(img_msg);
+        // location_publisher_->publish(pt);
