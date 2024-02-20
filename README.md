@@ -96,6 +96,6 @@ It will make the bot visit points defined in config/locations.yaml
 
 # Method 3
 ```
-ros2 run maze_sover go_to_goal_node X -Y
+ros2 run maze_sover go_to_goal_node X Y
 ```
 Here X & Y are coordinates of the goal point.
