@@ -24,6 +24,8 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
+
 
 
 
@@ -60,7 +62,7 @@ set(TARGET_DEPENDS
   nav2_msgs
   geometry_msgs
   cv_bridge
-  # behaviortree_cpp
+  behaviortree_cpp
   rclcpp_action
   yaml-cpp
   tf2

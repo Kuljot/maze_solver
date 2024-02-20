@@ -1,0 +1,5 @@
+#Define oblect locations as [x,y,theta]
+location1: [-10.0, -5, -2.0]
+location2: [10.0, 20.0, -0.5]
+location3: [0.0, 5, 1.0]
+location4: [0.0, -25, -1.0]

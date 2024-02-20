@@ -14,13 +14,13 @@ def generate_launch_description():
             executable="autonomy_node",
             name="autonomy_node",
             parameters=[
-                {"file": os.path.join(get_package_share_directory(package_name),'config','sim_house_locations.yaml')
+                {"file": os.path.join(get_package_share_directory(package_name),'config','locations.yaml')
             }]
         )
 
    
     return LaunchDescription([
-        autonomy_node_cmd,
+        autonomy_node_cmd
     ])
 
 

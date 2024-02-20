@@ -38,14 +38,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ![Screenshot from 2024-02-18 11-08-29](https://github.com/Kuljot/maze_solver/assets/33811204/eb81a560-7d11-4735-8b68-368416ae7115)
 
 
-## Run the SLAM Toolbox for map creation
-```
-ros2 launch maze_solver slam.launch.py
-```
-![image](https://github.com/Kuljot/maze_solver/assets/33811204/57587fc5-47f3-43ad-bedf-53d41284569a)
-
-After that you can drive the bot around to create the map.
-
+## Method 1
 
 ## Run the localiszation node 
 ```
@@ -69,4 +62,40 @@ If the localization node is still running then you can run the above path planni
 It will find the nearest node to the bot and use an A* algorithm to trace the path to go to the input node. Blue path represents the A* search traversal and green path is the shortest path.
 
 
+## Method 2
+## Run the SLAM Toolbox for map creation
+```
+ros2 launch maze_solver slam.launch.py
+```
+![image](https://github.com/Kuljot/maze_solver/assets/33811204/57587fc5-47f3-43ad-bedf-53d41284569a)
 
+After that you can drive the bot around to create the map. Add the slam toolbox plugin from Rviz->Panels->Add New Panel
+![Screenshot from 2024-02-18 18-00-40](https://github.com/Kuljot/maze_solver/assets/33811204/a184f62d-9be5-424f-83b1-f8a6daeadd0e)
+
+Once the plugin is added you can save the map using Save Map button.
+![Screenshot from 2024-02-18 18-01-11](https://github.com/Kuljot/maze_solver/assets/33811204/e4fa9d0b-453c-499b-82bb-240279602022)
+
+## Run Nav2
+Launch the navigation framework using
+```
+ros2 launch maze_solver custom_nav2_bringup.launch.py 
+```
+![Screenshot from 2024-02-20 16-30-14](https://github.com/Kuljot/maze_solver/assets/33811204/9f5f9dfc-a3e5-4657-8753-3fae02177a3d)
+
+Give the goal
+
+![Screenshot from 2024-02-20 16-30-30](https://github.com/Kuljot/maze_solver/assets/33811204/b11aec9b-c4b8-4162-94e9-be7959b9496c)
+
+## To run the Behavior Tree WayPoint follower 
+```
+ros2 launch maze_solver autonomy.launch.py
+```
+
+It will make the bot visit points defined in config/locations.yaml
+
+
+# Method 3
+```
+ros2 run maze_sover go_to_goal_node X -Y
+```
+Here X & Y are coordinates of the goal point.

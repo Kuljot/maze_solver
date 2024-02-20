@@ -9,9 +9,9 @@ class AutonomyNode: public rclcpp::Node
     explicit AutonomyNode(const std::string &node_name);
     void create_behavior_tree();
     void update_behavior_tree();
-    void setup();
+    void setup();   //Initialize
   
   private:
-    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::TimerBase::SharedPtr timer_; //Timer to tick the tree 
     BT::Tree tree_;
 };

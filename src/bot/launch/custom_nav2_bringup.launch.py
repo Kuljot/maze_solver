@@ -16,7 +16,7 @@ def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
     package_name="maze_solver"
-    world_file="./src/bot/worlds/world3.py"
+    world_file="./src/bot/worlds/Maze"
     launch_dir = os.path.join(get_package_share_directory('nav2_bringup'), 'launch')
 
     # Create the launch configuration variables
@@ -74,7 +74,7 @@ def generate_launch_description():
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
         default_value=
-            os.path.join(get_package_share_directory(package_name),'maps', 'map_serial.yaml'),
+            os.path.join(get_package_share_directory(package_name),'maps', 'map.yaml'),
         description='Full path to map file to load')
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -84,7 +84,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(get_package_share_directory(package_name), 'config', 'nav2_params.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes')
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -131,7 +131,7 @@ def generate_launch_description():
         #              https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/91
         # default_value=os.path.join(get_package_share_directory('turtlebot3_gazebo'),
         # worlds/turtlebot3_worlds/waffle.model')
-        default_value=os.path.join(get_package_share_directory(package_name), 'worlds', 'world3.model'),
+        default_value=os.path.join(get_package_share_directory(package_name), 'worlds', 'Maze'),
         description='Full path to world model file to load')
 
     declare_robot_name_cmd = DeclareLaunchArgument(

@@ -1,19 +1,20 @@
 #include "navigation_behaviors.h"
-#include "yaml-cpp/yaml.h"
-#include <string>
+#include "rclcpp/rclcpp.hpp"
+
 
 GoToPose::GoToPose(const std::string &name,
                    const BT::NodeConfiguration &config,
                    rclcpp::Node::SharedPtr node_ptr)
         :BT::StatefulActionNode(name,config), node_ptr_(node_ptr)
 {
+    std::cout<<" GoToPose Constructor called"<<std::endl;
     action_client_ptr_=rclcpp_action::create_client<NavigateToPose>(node_ptr_,"/navigate_to_pose");
     done_flag_ = false;
 }
 
 BT::PortsList GoToPose::providedPorts()
 {
-    return {BT::InputPort<std::string>("loc")};
+    return {BT::InputPort<std::string>("loc")}; //Input Port from which bot will get location of goal
 }
 
 BT::NodeStatus GoToPose::onStart()
@@ -42,7 +43,6 @@ BT::NodeStatus GoToPose::onStart()
     //send pose
     done_flag_=false;
     action_client_ptr_->async_send_goal(goal_msg,send_goal_options);
-    RCLCPP_INFO(node_ptr_->get_logger(),"Sent goal to Nav2\n");
     return BT::NodeStatus::RUNNING;
 }
 
@@ -55,13 +55,14 @@ BT::NodeStatus GoToPose::onRunning()
     }
     else
     {
+        RCLCPP_INFO(node_ptr_->get_logger(),"Running\n");
         return BT::NodeStatus::RUNNING;
     }
 }
 
-void GoToPose::onHalted(){
-    RCLCPP_INFO(node_ptr_->get_logger(),"Halted\n");
-}
+// void GoToPose::onHalted(){
+//     RCLCPP_INFO(node_ptr_->get_logger(),"Halted\n");
+// }
 
 void GoToPose::nav_to_pose_callback(const GoalHandleNav::WrappedResult &result)
 {
